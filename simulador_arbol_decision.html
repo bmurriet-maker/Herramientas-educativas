@@ -1,0 +1,570 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Simulador: Árbol de Decisión — Mantenimiento Predictivo de Flota</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --navy:#0B2545;--teal:#00B4A6;--gold:#D97706;--red:#DC2626;--green:#16A34A;
+  --blue:#1D4ED8;--purple:#7C3AED;--muted:#64748B;--border:#E2E8F0;
+  --text:#1E293B;--lgray:#F1F5F9;--white:#fff;
+}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+  background:#F8FAFC;color:var(--text);min-height:100vh}
+.header{background:var(--navy);color:#fff;padding:0 28px;height:56px;
+  display:flex;align-items:center;gap:14px;position:sticky;top:0;z-index:100}
+.hlogo{background:var(--teal);color:var(--navy);font-size:10px;font-weight:700;
+  padding:4px 10px;border-radius:6px;letter-spacing:.06em}
+.htitle{font-size:15px;font-weight:600}
+.hsub{font-size:11px;color:#94A3B8;margin-top:1px}
+.hbadge{margin-left:auto;background:rgba(0,180,166,.15);color:var(--teal);
+  font-size:10px;font-weight:600;padding:4px 12px;border-radius:20px;
+  border:1px solid rgba(0,180,166,.25)}
+.main{max-width:1120px;margin:0 auto;padding:20px}
+.grid{display:grid;grid-template-columns:330px 1fr;gap:18px;align-items:start}
+@media(max-width:800px){.grid{grid-template-columns:1fr}}
+.card{background:#fff;border:1px solid var(--border);border-radius:12px;padding:16px 18px;margin-bottom:14px}
+.ctitle{font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:12px}
+.sl-row{margin-bottom:12px}
+.sl-head{display:flex;justify-content:space-between;margin-bottom:5px}
+.sl-lbl{font-size:12px;color:var(--muted)}
+.sl-val{font-size:13px;font-weight:600;color:var(--text)}
+input[type=range]{width:100%;height:5px;border-radius:3px;outline:none;
+  -webkit-appearance:none;background:var(--lgray);cursor:pointer}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:17px;height:17px;
+  border-radius:50%;background:var(--teal);cursor:pointer;border:2px solid #fff}
+select{width:100%;padding:7px 10px;border:1px solid var(--border);border-radius:8px;
+  font-size:12px;background:#fff;cursor:pointer;outline:none;color:var(--text)}
+.presets{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px}
+.pb{padding:5px 12px;font-size:11px;font-weight:500;border:1px solid var(--border);
+  border-radius:20px;background:#fff;color:var(--muted);cursor:pointer;transition:all .12s}
+.pb:hover,.pb.on{background:var(--teal);color:#fff;border-color:var(--teal)}
+.result{border-radius:12px;padding:14px 18px;display:flex;align-items:center;gap:14px;
+  margin-bottom:14px;transition:background .3s}
+.rscore{font-size:40px;font-weight:700;min-width:72px;line-height:1}
+.rlabel{font-size:15px;font-weight:700}
+.rsub{font-size:11px;margin-top:2px;opacity:.85}
+.rbar{height:7px;border-radius:4px;background:rgba(0,0,0,.1);margin-top:7px;max-width:180px;overflow:hidden}
+.rfill{height:100%;border-radius:4px;background:rgba(255,255,255,.75);transition:width .4s}
+.tabs{display:flex;gap:0;border-bottom:1px solid var(--border);margin-bottom:14px}
+.tab{padding:8px 16px;font-size:12px;font-weight:500;cursor:pointer;border:none;
+  background:none;color:var(--muted);border-bottom:2px solid transparent;margin-bottom:-1px;transition:all .12s}
+.tab.on{color:var(--teal);border-bottom-color:var(--teal)}
+.tp{display:none}.tp.on{display:block}
+/* ── ÁRBOL ── */
+.tree-box{background:#fff;border:1px solid var(--border);border-radius:12px;padding:16px;overflow:visible}
+
+/* Nodos SVG — estados vía clase JS */
+.nd-rect{transition:fill .25s,stroke .25s,opacity .25s}
+.nd-text{transition:fill .25s,opacity .25s}
+.nd-line{transition:stroke .25s,stroke-opacity .25s,stroke-width .25s}
+/* Estado base: gris claro */
+.nd-rect{fill:#F8FAFC;stroke:#CBD5E1;stroke-width:1}
+.nd-text-main{fill:#94A3B8;font-size:13px;font-weight:600;font-family:-apple-system,sans-serif}
+.nd-text-sub{fill:#CBD5E1;font-size:10px;font-family:-apple-system,sans-serif}
+.nd-line{stroke:#CBD5E1;stroke-width:1.5;fill:none;stroke-opacity:.5}
+/* Estado activo: aplica color del nodo */
+.active .nd-rect{stroke-width:2.5;opacity:1}
+.active .nd-text-main{fill:#fff}
+.active .nd-text-sub{fill:rgba(255,255,255,.75)}
+.active .nd-line{stroke-opacity:1;stroke-width:2.5}
+/* Colores por tipo */
+.nc-blue.active .nd-rect{fill:#1D4ED8;stroke:#1D4ED8}
+.nc-teal.active .nd-rect{fill:#0D9488;stroke:#0D9488}
+.nc-amber.active .nd-rect{fill:#D97706;stroke:#D97706}
+.nc-red.active .nd-rect{fill:#DC2626;stroke:#DC2626}
+.nc-green.active .nd-rect{fill:#16A34A;stroke:#16A34A}
+/* Conectores activos */
+.cl-blue.active .nd-line{stroke:#1D4ED8}
+.cl-teal.active .nd-line{stroke:#0D9488}
+.cl-amber.active .nd-line{stroke:#D97706}
+/* Hoja inactiva conserva color leve */
+.leaf-red .nd-rect{fill:#FEF2F2;stroke:#FECACA}
+.leaf-red .nd-text-main{fill:#DC2626}
+.leaf-amber .nd-rect{fill:#FFFBEB;stroke:#FDE68A}
+.leaf-amber .nd-text-main{fill:#D97706}
+.leaf-green .nd-rect{fill:#F0FDF4;stroke:#BBF7D0}
+.leaf-green .nd-text-main{fill:#16A34A}
+/* Dimmed: ramas no activas */
+.dimmed .nd-rect{opacity:.3}
+.dimmed .nd-text-main{opacity:.3}
+.dimmed .nd-text-sub{opacity:.2}
+.dimmed .nd-line{stroke-opacity:.15}
+/* Labels de rama */
+.branch-lbl{font-size:11px;font-weight:600;font-family:-apple-system,sans-serif;
+  fill:#94A3B8;transition:fill .25s,opacity .25s}
+.branch-lbl.on{fill:#374151;opacity:1}
+.branch-lbl.dim{opacity:.25}
+/* Nivel labels */
+.level-lbl{font-size:10px;fill:#CBD5E1;font-family:-apple-system,sans-serif}
+/* Step en pestaña ruta */
+.step{display:flex;gap:10px;align-items:flex-start;padding:10px 12px;
+  border-radius:10px;margin-bottom:8px;background:var(--lgray)}
+.step-num{width:26px;height:26px;border-radius:50%;display:flex;align-items:center;
+  justify-content:center;font-size:11px;font-weight:700;color:#fff;flex-shrink:0}
+.step-q{font-size:11px;color:var(--muted);margin-bottom:2px}
+.step-a{font-size:13px;font-weight:600;color:var(--text)}
+.step-br{font-size:11px;color:var(--muted);margin-top:2px}
+.warn{color:#DC2626}
+.feat-row{display:flex;align-items:center;gap:8px;margin-bottom:7px}
+.feat-name{font-size:11px;color:var(--muted);width:175px;flex-shrink:0}
+.feat-track{flex:1;height:6px;background:var(--lgray);border-radius:3px;overflow:hidden}
+.feat-fill{height:100%;border-radius:3px}
+.feat-pct{font-size:11px;color:var(--muted);width:34px;text-align:right;flex-shrink:0}
+.cmpgrid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:4px}
+.cmpbox{border-radius:10px;padding:12px 14px}
+.cmpbox p{font-size:12px;line-height:1.65;color:var(--muted)}
+.cmpbox strong{font-weight:600;color:var(--text)}
+.info-box{border-radius:10px;padding:11px 14px;font-size:11px;line-height:1.65;margin-top:10px}
+.explainer{background:#EFF6FF;border:1px solid #BFDBFE;border-radius:10px;
+  padding:11px 14px;font-size:12px;color:#1E3A5F;line-height:1.65;margin-bottom:16px}
+.legend{display:flex;gap:12px;flex-wrap:wrap;margin-top:10px}
+.leg{display:flex;align-items:center;gap:4px;font-size:11px;color:var(--muted)}
+.ldot{width:10px;height:10px;border-radius:2px;flex-shrink:0}
+footer{text-align:center;padding:18px;font-size:11px;color:var(--muted);
+  border-top:1px solid var(--border);margin-top:20px}
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="hlogo">ML · IA</div>
+  <div><div class="htitle">Simulador de Árbol de Decisión</div>
+  <div class="hsub">Mantenimiento predictivo de flota · Gestión de Residuos · Sesión 3</div></div>
+  <div class="hbadge">Herramienta educativa</div>
+</div>
+
+<div class="main">
+<div class="explainer">
+  <strong>¿Cómo usar este simulador?</strong> Ajusta los valores del camión con los controles de la izquierda. El árbol de la derecha resalta en tiempo real la ruta activa — las ramas que el modelo recorre para llegar a su predicción. Las ramas que no se recorren se atenúan. Prueba los 4 casos de ejemplo para ver cómo cambia la ruta.
+</div>
+
+<div class="grid">
+
+<!-- ── COLUMNA IZQUIERDA ── -->
+<div>
+  <div class="card">
+    <div class="ctitle">Casos de prueba</div>
+    <div class="presets">
+      <button class="pb" onclick="setPreset('CAM-042',9,107,185000,'periferica_rural','seca',this)">CAM-042<br><small>Alto riesgo</small></button>
+      <button class="pb" onclick="setPreset('CAM-108',4,89,62000,'urbana_central','seca',this)">CAM-108<br><small>Bajo riesgo</small></button>
+      <button class="pb" onclick="setPreset('CAM-055',7,96,141000,'industrial','seca',this)">CAM-055<br><small>Medio</small></button>
+      <button class="pb" onclick="setPreset('CAM-201',2,88,28000,'urbana_periferica','lluvias',this)">CAM-201<br><small>Nuevo · lluvias</small></button>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="ctitle">Características del vehículo</div>
+    <div class="sl-row">
+      <div class="sl-head"><span class="sl-lbl">Edad del vehículo</span><span class="sl-val" id="v-edad">7 años</span></div>
+      <input type="range" min="1" max="12" step="1" value="7" id="sl-edad" oninput="update()">
+      <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--muted);margin-top:2px"><span>1 año</span><span>12 años</span></div>
+    </div>
+    <div class="sl-row">
+      <div class="sl-head"><span class="sl-lbl">Temperatura del motor</span><span class="sl-val" id="v-temp">95 °C</span></div>
+      <input type="range" min="78" max="118" step="1" value="95" id="sl-temp" oninput="update()">
+      <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--muted);margin-top:2px"><span>78 °C</span><span>118 °C</span></div>
+    </div>
+    <div class="sl-row">
+      <div class="sl-head"><span class="sl-lbl">Kilómetros acumulados</span><span class="sl-val" id="v-km">141,000 km</span></div>
+      <input type="range" min="10000" max="260000" step="1000" value="141000" id="sl-km" oninput="update()">
+      <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--muted);margin-top:2px"><span>10k</span><span>260k km</span></div>
+    </div>
+    <div class="sl-row">
+      <div class="sl-head"><span class="sl-lbl">Tipo de ruta</span><span class="sl-val" id="v-ruta">Industrial</span></div>
+      <select id="sl-ruta" onchange="update()">
+        <option value="urbana_central">Urbana central</option>
+        <option value="urbana_periferica">Urbana periférica</option>
+        <option value="industrial" selected>Industrial</option>
+        <option value="periferica_rural">Periférica rural</option>
+      </select>
+    </div>
+    <div class="sl-row">
+      <div class="sl-head"><span class="sl-lbl">Temporada</span><span class="sl-val" id="v-season">Seca</span></div>
+      <select id="sl-season" onchange="update()">
+        <option value="seca">Temporada seca (ene–mar)</option>
+        <option value="lluvias">Temporada lluvias (abr–jun)</option>
+      </select>
+    </div>
+  </div>
+
+  <div id="result-box" class="result"></div>
+
+  <div class="card">
+    <div class="ctitle">Importancia de variables (XGBoost real)</div>
+    <div id="feat-bars"></div>
+    <p style="font-size:11px;color:var(--red);margin-top:8px;font-style:italic">⚠ dias_desde_servicio: leakage — registrada después de revisar el vehículo.</p>
+  </div>
+</div>
+
+<!-- ── COLUMNA DERECHA ── -->
+<div>
+  <div class="tabs">
+    <button class="tab on" onclick="showTab('arbol',this)">Árbol de decisión</button>
+    <button class="tab" onclick="showTab('ruta',this)">Recorrido paso a paso</button>
+    <button class="tab" onclick="showTab('concepto',this)">RF vs XGBoost</button>
+  </div>
+
+  <!-- PESTAÑA 1: ÁRBOL -->
+  <div id="tp-arbol" class="tp on">
+    <div class="tree-box">
+
+<!-- ═══════════════════════════════════════════════════════════
+     ÁRBOL SVG ESTÁTICO — colores controlados por clases JS
+═══════════════════════════════════════════════════════════ -->
+<svg viewBox="0 0 680 420" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:auto;display:block">
+
+  <!-- Labels de nivel -->
+  <text class="level-lbl" x="8" y="55">Nivel 1</text>
+  <text class="level-lbl" x="8" y="185">Nivel 2</text>
+  <text class="level-lbl" x="8" y="335">Nivel 3</text>
+
+  <!-- ── CONECTORES ─────────────────────────────────────────── -->
+
+  <!-- Raíz → Nodo izq (sí) -->
+  <g id="cn-root-izq" class="cl-blue">
+    <path class="nd-line" d="M340,100 C340,145 185,145 185,170"/>
+  </g>
+  <!-- Raíz → Nodo der (no) -->
+  <g id="cn-root-der" class="cl-blue">
+    <path class="nd-line" d="M340,100 C340,145 495,145 495,170"/>
+  </g>
+  <!-- Nodo izq → Hoja 1 (sí) -->
+  <g id="cn-izq-h1" class="cl-amber">
+    <path class="nd-line" d="M185,230 C185,275 100,275 100,300"/>
+  </g>
+  <!-- Nodo izq → Hoja 2 (no) -->
+  <g id="cn-izq-h2" class="cl-amber">
+    <path class="nd-line" d="M185,230 C185,275 285,275 285,300"/>
+  </g>
+  <!-- Nodo der → Hoja 3 (sí) -->
+  <g id="cn-der-h3" class="cl-teal">
+    <path class="nd-line" d="M495,230 C495,275 395,275 395,300"/>
+  </g>
+  <!-- Nodo der → Hoja 4 (no) -->
+  <g id="cn-der-h4" class="cl-teal">
+    <path class="nd-line" d="M495,230 C495,275 585,275 585,300"/>
+  </g>
+
+  <!-- ── LABELS DE RAMA ──────────────────────────────────────── -->
+  <text id="bl-root-si"  class="branch-lbl" x="245" y="140" text-anchor="middle">Sí</text>
+  <text id="bl-root-no"  class="branch-lbl" x="435" y="140" text-anchor="middle">No</text>
+  <text id="bl-izq-si"   class="branch-lbl" x="120"  y="272" text-anchor="middle">Sí</text>
+  <text id="bl-izq-no"   class="branch-lbl" x="254"  y="272" text-anchor="middle">No</text>
+  <text id="bl-der-si"   class="branch-lbl" x="426"  y="272" text-anchor="middle">Sí</text>
+  <text id="bl-der-no"   class="branch-lbl" x="565"  y="272" text-anchor="middle">No</text>
+
+  <!-- ── NODO RAÍZ ─────────────────────────────────────────── -->
+  <g id="nd-root" class="nc-blue">
+    <rect class="nd-rect" x="210" y="20" width="260" height="80" rx="10"/>
+    <text class="nd-text-main" x="340" y="52" text-anchor="middle" dominant-baseline="central">Edad del vehículo</text>
+    <text class="nd-text-sub"  x="340" y="74" text-anchor="middle" dominant-baseline="central">¿más de 7 años?</text>
+    <!-- Icono pregunta -->
+    <text style="font-size:18px;fill:#94A3B8" id="nd-root-icon" x="248" y="66" text-anchor="middle" dominant-baseline="central">📅</text>
+  </g>
+
+  <!-- ── NODO IZQUIERDO (sí: edad > 7) ─────────────────────── -->
+  <g id="nd-izq" class="nc-amber">
+    <rect class="nd-rect" x="75" y="170" width="220" height="60" rx="10"/>
+    <text class="nd-text-main" x="185" y="194" text-anchor="middle" dominant-baseline="central">Temperatura del motor</text>
+    <text class="nd-text-sub"  x="185" y="214" text-anchor="middle" dominant-baseline="central">¿mayor a 100 °C?</text>
+  </g>
+
+  <!-- ── NODO DERECHO (no: edad ≤ 7) ───────────────────────── -->
+  <g id="nd-der" class="nc-teal">
+    <rect class="nd-rect" x="385" y="170" width="220" height="60" rx="10"/>
+    <text class="nd-text-main" x="495" y="194" text-anchor="middle" dominant-baseline="central">Kilómetros acumulados</text>
+    <text class="nd-text-sub"  x="495" y="214" text-anchor="middle" dominant-baseline="central">¿más de 140,000 km?</text>
+  </g>
+
+  <!-- ── HOJAS ─────────────────────────────────────────────── -->
+
+  <!-- Hoja 1: edad>7 Y temp>100 → FALLA ALTA -->
+  <g id="nd-h1" class="leaf-red">
+    <rect class="nd-rect" x="30"  y="300" width="140" height="80" rx="10"/>
+    <text class="nd-text-main" x="100" y="328" text-anchor="middle" dominant-baseline="central" style="font-size:15px;font-weight:700">FALLA</text>
+    <text class="nd-text-sub"  x="100" y="350" text-anchor="middle" dominant-baseline="central">Score: 87%</text>
+    <text style="font-size:11px;fill:#94A3B8;font-family:-apple-system,sans-serif" x="100" y="368" text-anchor="middle" dominant-baseline="central">Edad alta + sobrecalent.</text>
+  </g>
+
+  <!-- Hoja 2: edad>7 Y temp≤100 → FALLA MEDIA -->
+  <g id="nd-h2" class="leaf-amber">
+    <rect class="nd-rect" x="210" y="300" width="150" height="80" rx="10"/>
+    <text class="nd-text-main" x="285" y="328" text-anchor="middle" dominant-baseline="central" style="font-size:15px;font-weight:700">FALLA</text>
+    <text class="nd-text-sub"  x="285" y="350" text-anchor="middle" dominant-baseline="central">Score: 58%</text>
+    <text style="font-size:11px;fill:#94A3B8;font-family:-apple-system,sans-serif" x="285" y="368" text-anchor="middle" dominant-baseline="central">Edad alta, temp. normal</text>
+  </g>
+
+  <!-- Hoja 3: edad≤7 Y km>140k → FALLA BAJA -->
+  <g id="nd-h3" class="leaf-amber">
+    <rect class="nd-rect" x="320" y="300" width="150" height="80" rx="10"/>
+    <text class="nd-text-main" x="395" y="328" text-anchor="middle" dominant-baseline="central" style="font-size:15px;font-weight:700">FALLA</text>
+    <text class="nd-text-sub"  x="395" y="350" text-anchor="middle" dominant-baseline="central">Score: 52%</text>
+    <text style="font-size:11px;fill:#94A3B8;font-family:-apple-system,sans-serif" x="395" y="368" text-anchor="middle" dominant-baseline="central">Km alto, vehículo joven</text>
+  </g>
+
+  <!-- Hoja 4: edad≤7 Y km≤140k → SIN FALLA -->
+  <g id="nd-h4" class="leaf-green">
+    <rect class="nd-rect" x="510" y="300" width="150" height="80" rx="10"/>
+    <text class="nd-text-main" x="585" y="328" text-anchor="middle" dominant-baseline="central" style="font-size:14px;font-weight:700">SIN FALLA</text>
+    <text class="nd-text-sub"  x="585" y="350" text-anchor="middle" dominant-baseline="central">Score: 11%</text>
+    <text style="font-size:11px;fill:#94A3B8;font-family:-apple-system,sans-serif" x="585" y="368" text-anchor="middle" dominant-baseline="central">Joven + km bajo</text>
+  </g>
+
+</svg>
+<!-- ═══════════════════════════════════════════════════════════ -->
+
+    </div><!-- /tree-box -->
+
+    <div class="legend">
+      <div class="leg"><div class="ldot" style="background:#1D4ED8"></div> Pregunta activa</div>
+      <div class="leg"><div class="ldot" style="background:#DC2626"></div> Falla alta</div>
+      <div class="leg"><div class="ldot" style="background:#D97706"></div> Falla moderada</div>
+      <div class="leg"><div class="ldot" style="background:#16A34A"></div> Sin falla</div>
+      <div class="leg"><div class="ldot" style="background:#E2E8F0"></div> Rama no recorrida</div>
+    </div>
+  </div><!-- /tp-arbol -->
+
+  <!-- PESTAÑA 2: RUTA -->
+  <div id="tp-ruta" class="tp">
+    <div class="card">
+      <div class="ctitle">Recorrido del árbol — decisión a decisión</div>
+      <div id="path-steps"></div>
+    </div>
+  </div>
+
+  <!-- PESTAÑA 3: CONCEPTO -->
+  <div id="tp-concepto" class="tp">
+    <div class="card">
+      <div class="ctitle">¿Qué diferencia a Random Forest de XGBoost?</div>
+      <div class="cmpgrid">
+        <div class="cmpbox" style="background:#EFF6FF;border:1px solid #BFDBFE">
+          <p style="font-size:12px;font-weight:700;color:#1E40AF;margin-bottom:6px">Random Forest</p>
+          <p>Construye <strong>300 árboles independientes</strong>, cada uno con una muestra aleatoria diferente. Al predecir, todos votan y gana la mayoría.</p>
+          <p style="margin-top:6px"><strong>Ventaja:</strong> muy robusto, difícil de sobreajustar.</p>
+          <p style="margin-top:4px"><strong>Analogía:</strong> 300 médicos independientes que diagnostican por separado y votan.</p>
+        </div>
+        <div class="cmpbox" style="background:#FFF7ED;border:1px solid #FED7AA">
+          <p style="font-size:12px;font-weight:700;color:#9A3412;margin-bottom:6px">XGBoost</p>
+          <p>Construye <strong>300 árboles en secuencia</strong>. El árbol 2 se concentra en los errores del árbol 1. Cada árbol corrige al anterior (Gradient Boosting).</p>
+          <p style="margin-top:6px"><strong>Ventaja:</strong> más preciso en datos tabulares de operaciones.</p>
+          <p style="margin-top:4px"><strong>Analogía:</strong> un equipo donde cada médico aprende de los errores del anterior.</p>
+        </div>
+      </div>
+      <div class="info-box" style="background:#F8FAFC;border:1px solid var(--border)">
+        <p style="font-size:12px;color:var(--text);line-height:1.7"><strong>Este simulador</strong> muestra UN árbol con 3 niveles de profundidad (máximo 4 hojas). El modelo real FleetSense usa XGBoost con 300 árboles y <code>max_depth=6</code> — hasta 64 hojas posibles por árbol. La predicción final es el promedio ponderado de los 300 árboles con <code>learning_rate=0.05</code>.</p>
+      </div>
+      <div class="info-box" style="background:#FEF2F2;border:1px solid #FECACA;margin-top:8px">
+        <p style="font-size:12px;color:#7F1D1D;line-height:1.7"><strong>Problema real del modelo v2.3:</strong> <code>scale_pos_weight=1</code> no compensa el desbalance de clases (74.5% sin falla). El modelo aprende a ignorar fallas para maximizar la accuracy. Resultado: recall real = <strong>24.3%</strong> — detecta solo 1 de cada 4 fallas reales.</p>
+      </div>
+    </div>
+  </div>
+
+</div><!-- /col derecha -->
+</div><!-- /grid -->
+</div><!-- /main -->
+
+<footer>
+  Simulador educativo · IA y Logística · Gestión Integral de Residuos Metropolitanos · 2026<br>
+  Modelo: XGBoost 3.2 entrenado sobre 10,000 registros · Este árbol es una simplificación pedagógica de 3 niveles de profundidad
+</footer>
+
+<script>
+const RUTA_W={urbana_central:0,urbana_periferica:0.05,industrial:0.08,periferica_rural:0.15};
+const RUTA_L={urbana_central:"Urbana central",urbana_periferica:"Urbana periférica",industrial:"Industrial",periferica_rural:"Periférica rural"};
+const FEATS=[
+  {n:"edad_anios",p:18.8,c:"#1D4ED8"},
+  {n:"ruta_periferica_rural",p:15.8,c:"#16A34A"},
+  {n:"kilometraje_acumulado",p:10.4,c:"#7C3AED"},
+  {n:"dias_desde_servicio ⚠",p:9.8,c:"#DC2626"},
+  {n:"carga_promedio_ton",p:9.6,c:"#D97706"},
+  {n:"temp_promedio_motor",p:9.3,c:"#EF4444"},
+  {n:"presion_neumaticos",p:9.1,c:"#0891B2"},
+];
+
+function getV(){
+  return{
+    edad:+document.getElementById('sl-edad').value,
+    temp:+document.getElementById('sl-temp').value,
+    km:+document.getElementById('sl-km').value,
+    ruta:document.getElementById('sl-ruta').value,
+    season:document.getElementById('sl-season').value,
+  };
+}
+
+function score(v){
+  let s=0.08;
+  if(v.edad>7) s+=0.30; else if(v.edad>5) s+=0.12;
+  if(v.temp>100) s+=0.24; else if(v.temp>95) s+=0.10;
+  if(v.km>140000) s+=0.16; else if(v.km>80000) s+=0.06;
+  s+=RUTA_W[v.ruta]||0;
+  if(v.season==='lluvias') s+=0.08;
+  return Math.min(Math.max(Math.round(s*100),5),97);
+}
+
+// IDs de todos los elementos del árbol que se pueden activar/dimmer
+const ALL_NODES=['nd-root','nd-izq','nd-der','nd-h1','nd-h2','nd-h3','nd-h4'];
+const ALL_CONN =['cn-root-izq','cn-root-der','cn-izq-h1','cn-izq-h2','cn-der-h3','cn-der-h4'];
+const ALL_BL   =['bl-root-si','bl-root-no','bl-izq-si','bl-izq-no','bl-der-si','bl-der-no'];
+
+function applyTree(v){
+  const edadSi=v.edad>7;
+  const tempSi=v.temp>100;
+  const kmSi=v.km>140000;
+
+  // Determinar qué está activo
+  const activeNodes=new Set(['nd-root']);
+  const activeConn=new Set();
+  const activeBL=new Set();
+
+  if(edadSi){
+    activeNodes.add('nd-izq');
+    activeConn.add('cn-root-izq');
+    activeBL.add('bl-root-si');
+    if(tempSi){
+      activeNodes.add('nd-h1'); activeConn.add('cn-izq-h1'); activeBL.add('bl-izq-si');
+    } else {
+      activeNodes.add('nd-h2'); activeConn.add('cn-izq-h2'); activeBL.add('bl-izq-no');
+    }
+  } else {
+    activeNodes.add('nd-der');
+    activeConn.add('cn-root-der');
+    activeBL.add('bl-root-no');
+    if(kmSi){
+      activeNodes.add('nd-h3'); activeConn.add('cn-der-h3'); activeBL.add('bl-der-si');
+    } else {
+      activeNodes.add('nd-h4'); activeConn.add('cn-der-h4'); activeBL.add('bl-der-no');
+    }
+  }
+
+  // Aplicar clases
+  ALL_NODES.forEach(id=>{
+    const el=document.getElementById(id);
+    if(!el) return;
+    el.classList.remove('active','dimmed');
+    if(activeNodes.has(id)) el.classList.add('active');
+    else el.classList.add('dimmed');
+  });
+  ALL_CONN.forEach(id=>{
+    const el=document.getElementById(id);
+    if(!el) return;
+    el.classList.remove('active','dimmed');
+    if(activeConn.has(id)) el.classList.add('active');
+    else el.classList.add('dimmed');
+  });
+  ALL_BL.forEach(id=>{
+    const el=document.getElementById(id);
+    if(!el) return;
+    el.classList.remove('on','dim');
+    if(activeBL.has(id)) el.classList.add('on');
+    else el.classList.add('dim');
+  });
+}
+
+function updateResult(sc){
+  const el=document.getElementById('result-box');
+  let bg,tc,label,sub;
+  if(sc>=65){bg='#FEF2F2';tc='#DC2626';label='Alerta: riesgo alto de falla';sub='El modelo recomienda mantenimiento preventivo inmediato';}
+  else if(sc>=40){bg='#FFFBEB';tc='#D97706';label='Riesgo moderado — monitorear';sub='Programar revisión en el próximo servicio';}
+  else{bg='#F0FDF4';tc='#16A34A';label='Sin alerta — operación normal';sub='El vehículo puede continuar en ruta';}
+  el.style.background=bg;
+  el.innerHTML=`<div class="rscore" style="color:${tc}">${sc}%</div>
+    <div><div class="rlabel" style="color:${tc}">${label}</div>
+    <div class="rsub" style="color:${tc}">${sub}</div>
+    <div class="rbar"><div class="rfill" style="width:${sc}%"></div></div></div>`;
+}
+
+function updateSteps(v){
+  const edadSi=v.edad>7, tempSi=v.temp>100, kmSi=v.km>140000;
+  const steps=[];
+  steps.push({
+    n:1,c:'#1D4ED8',
+    q:'Pregunta 1 — Edad del vehículo',
+    a:`${edadSi?'Sí':'No'} → ${v.edad} años (umbral: más de 7 años)`,
+    br:`Rama ${edadSi?'izquierda: vehículo viejo → evaluar temperatura del motor':'derecha: vehículo joven → evaluar kilómetros'}`,
+    warn:false
+  });
+  if(edadSi){
+    steps.push({
+      n:2,c:'#D97706',
+      q:'Pregunta 2 — Temperatura del motor',
+      a:`${tempSi?'Sí':'No'} → ${v.temp} °C (umbral: mayor a 100 °C)`,
+      br:tempSi?'Sobrecalentamiento detectado → hoja: FALLA con score 87%':'Temperatura normal → hoja: FALLA moderada con score 58%',
+      warn:false
+    });
+  } else {
+    steps.push({
+      n:2,c:'#0D9488',
+      q:'Pregunta 2 — Kilómetros acumulados',
+      a:`${kmSi?'Sí':'No'} → ${v.km.toLocaleString()} km (umbral: más de 140,000 km)`,
+      br:kmSi?'Desgaste por uso → hoja: FALLA con score 52%':'Kilómetros bajos → hoja: SIN FALLA con score 11%',
+      warn:false
+    });
+  }
+  if(v.ruta==='periferica_rural'||v.ruta==='industrial'){
+    steps.push({n:3,c:'#7C3AED',q:'Factor adicional — Tipo de ruta',
+      a:`${RUTA_L[v.ruta]} → mayor esfuerzo operativo`,
+      br:'Incrementa el score final del modelo (no es una pregunta del árbol sino un ajuste de score)',warn:false});
+  }
+  if(v.season==='lluvias'){
+    steps.push({n:steps.length+1,c:'#DC2626',
+      q:'Advertencia — Temporada de lluvias',
+      a:'El vehículo opera en condiciones más demandantes',
+      br:'⚠ El modelo v2.3 fue entrenado solo en temporada seca. Sus predicciones en lluvias son menos confiables (Concept Drift).',
+      warn:true});
+  }
+  document.getElementById('path-steps').innerHTML=steps.map(s=>`
+    <div class="step">
+      <div class="step-num" style="background:${s.c}">${s.n}</div>
+      <div><div class="step-q">${s.q}</div>
+      <div class="step-a">${s.a}</div>
+      <div class="step-br ${s.warn?'warn':''}">${s.br}</div></div>
+    </div>`).join('');
+}
+
+function buildFeatBars(){
+  document.getElementById('feat-bars').innerHTML=FEATS.map(f=>`
+    <div class="feat-row">
+      <div class="feat-name" style="${f.n.includes('⚠')?'color:#DC2626':''}">${f.n}</div>
+      <div class="feat-track"><div class="feat-fill" style="width:${f.p/20*100}%;background:${f.c}"></div></div>
+      <div class="feat-pct">${f.p}%</div>
+    </div>`).join('');
+}
+
+function showTab(id,btn){
+  document.querySelectorAll('.tp').forEach(p=>p.classList.remove('on'));
+  document.querySelectorAll('.tab').forEach(b=>b.classList.remove('on'));
+  document.getElementById('tp-'+id).classList.add('on');
+  btn.classList.add('on');
+}
+
+function update(){
+  const v=getV();
+  document.getElementById('v-edad').textContent=v.edad+' años';
+  document.getElementById('v-temp').textContent=v.temp+' °C';
+  document.getElementById('v-km').textContent=v.km.toLocaleString()+' km';
+  document.getElementById('v-ruta').textContent=RUTA_L[v.ruta];
+  document.getElementById('v-season').textContent=v.season==='seca'?'Seca':'Lluvias';
+  applyTree(v);
+  updateResult(score(v));
+  updateSteps(v);
+}
+
+function setPreset(id,edad,temp,km,ruta,season,btn){
+  document.querySelectorAll('.pb').forEach(b=>b.classList.remove('on'));
+  btn.classList.add('on');
+  document.getElementById('sl-edad').value=edad;
+  document.getElementById('sl-temp').value=temp;
+  document.getElementById('sl-km').value=km;
+  document.getElementById('sl-ruta').value=ruta;
+  document.getElementById('sl-season').value=season;
+  update();
+}
+
+buildFeatBars();
+update();
+</script>
+</body>
+</html>
